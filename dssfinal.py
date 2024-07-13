@@ -2,6 +2,8 @@ import os
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
+import matplotlib.pyplot as plt
+
 
 # Weights for each metric
 weights = {
@@ -109,7 +111,7 @@ def categorize_schools(df):
     ]
     categories = ['High Need', 'Moderate Need', 'Low Need', 'No Need']
     
-    df['Need_Category'] = np.select(conditions, categories)
+    df['Need_Category'] = np.select(conditions, categories, default='Unknown')
     return df
 
 def allocate_resources(df, total_resources):
@@ -176,6 +178,49 @@ def allocate_resources(df, total_resources):
                     df.update(redistribute_df)
     return df
 
+def plot_performance_scores(df):
+
+    df.to_csv('processed_school_data.csv', index=False)
+
+    # Filter schools with Performance_Score > 0.5
+    df = df.sort_values(by='Performance_Score').reset_index(drop=True)
+
+    colors = ['green' if x < 0.6 else 'red' for x in df['Composite_Score']]
+
+    # Plotting
+    print(df['School'])
+    plt.figure(figsize=(12, 8))
+    for i, school in enumerate(df['School']):
+        print(school)
+        plt.plot(i, df['Composite_Score'][i], 'o', color=colors[i])
+    
+
+    #plt.plot(df['Performance_Score'], color='blue')
+    plt.xticks(ticks=range(len(df['School'])), labels=df['School'], rotation=90)
+    plt.xlabel('School Name')
+    plt.ylabel('Performance Score')
+    plt.ylim(0.00,1.00)
+    plt.title('Performance Scores of Schools')
+    plt.tight_layout()
+    plt.show()
+
+def plot_diagram_allocation(df):
+    """Visualize allocation for each school, in the y axis it should be money amount, in the x axis should be name of school."""
+    # Convert 'Allocated_Resources' to numeric for plotting
+    df['Allocated_Resources_Numeric'] = df['Allocated_Resources'].str.replace('[$M]', '', regex=True).astype(float) * 1_000_000
+
+    # Sort the DataFrame by 'Allocated_Resources'
+    df = df.sort_values(by='Allocated_Resources_Numeric', ascending=False).reset_index(drop=True)
+    
+    plt.figure(figsize=(12, 8))
+    plt.bar(df['School'], df['Allocated_Resources_Numeric'], color='blue')
+    
+    plt.xlabel('School Name')
+    plt.ylabel('Allocated Resources ($)')
+    plt.title('Resource Allocation for Each School')
+    plt.xticks(rotation=90)
+    plt.tight_layout()
+    plt.show()
 
 def main():
     # Check the current working directory and list files
@@ -202,6 +247,9 @@ def main():
     result = df[['School', 'Composite_Score', 'Need_Category', 'Rank', 'Allocated_Resources']]
     result = result.sort_values(by='Rank')
     print(result.to_string(index=False))
+
+    plot_performance_scores(df)
+    plot_diagram_allocation(df)
 
 if __name__ == "__main__":
     main()
