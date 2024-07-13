@@ -95,7 +95,7 @@ def calculate_scores(df):
                              weights['School Infrastructure Quality'] * df['Infrastructure_Score'])
 
     # Rank schools based on composite score
-    df['Rank'] = df['Composite_Score'].rank(ascending=False).astype(int)
+    df['Rank'] = df['Composite_Score'].rank(ascending=True).astype(int)
     
     return df
 
@@ -113,6 +113,7 @@ def categorize_schools(df):
     
     return df
 
+
 def allocate_resources(df, total_resources):
     """Allocate resources based on need categories and composite scores."""
     # Categorize schools based on composite score thresholds
@@ -126,19 +127,65 @@ def allocate_resources(df, total_resources):
         'No Need': 0 * total_resources
     }
     
+    # Define maximum percentage of total resources a single school can receive within each category
+    max_percentage_low_need = 0.025  # 5% of total resources
+    max_percentage_moderate = 0.1   # 10% of total resources
+
+    # Initialize allocated resources column
+    df['Allocated_Resources'] = 0
+
     # Allocate resources within each category
-    allocations = []
     for category, allocation in category_allocation.items():
-        category_df = df[df['Need_Category'] == category]
-        category_df['Inverse_Composite_Score'] = 1 / category_df['Composite_Score']
-        category_df['Normalized_Allocation'] = category_df['Inverse_Composite_Score'] / category_df['Inverse_Composite_Score'].sum()
-        category_df['Allocated_Resources'] = category_df['Normalized_Allocation'] * allocation
-        allocations.append(category_df)
-    
-    # Combine all allocations into one DataFrame
-    df = pd.concat(allocations)
-    
+        category_df = df[df['Need_Category'] == category].copy()
+        if not category_df.empty:
+            category_df.loc[:, 'Inverse_Composite_Score'] = 1 / category_df['Composite_Score']
+            total_inverse_score = category_df['Inverse_Composite_Score'].sum()
+            category_df.loc[:, 'Normalized_Allocation'] = category_df['Inverse_Composite_Score'] / total_inverse_score
+            category_df.loc[:, 'Allocated_Resources'] = category_df['Normalized_Allocation'] * allocation
+            
+            # Apply the cap to each school's allocation based on category
+            if category == 'Low Need':
+                max_allocation_per_school = max_percentage_low_need * total_resources
+            elif category == 'Moderate Need':
+                max_allocation_per_school = max_percentage_moderate * total_resources
+            else:
+                max_allocation_per_school = float('inf')  # No cap for High Need
+
+            category_df.loc[:, 'Allocated_Resources'] = category_df['Allocated_Resources'].apply(
+                lambda x: min(x, max_allocation_per_school))
+            
+            # Collect any excess funds resulting from the cap
+            excess_funds = allocation - category_df['Allocated_Resources'].sum()
+            
+            df.update(category_df)
+            
+            # Redistribute excess funds among schools in needier categories
+            if excess_funds > 0:
+                if category == 'Low Need':
+                    moderate_need_df = df[df['Need_Category'] == 'Moderate Need']
+                    high_need_df = df[df['Need_Category'] == 'High Need']
+                    redistribute_df = pd.concat([moderate_need_df, high_need_df])
+                elif category == 'Moderate Need':
+                    high_need_df = df[df['Need_Category'] == 'High Need']
+                    redistribute_df = high_need_df
+                else:
+                    redistribute_df = pd.DataFrame()
+                
+                if not redistribute_df.empty:
+                    redistribute_df = redistribute_df.copy()
+                    redistribute_df['Inverse_Composite_Score'] = 1 / redistribute_df['Composite_Score']
+                    total_inverse_score = redistribute_df['Inverse_Composite_Score'].sum()
+                    redistribute_df['Normalized_Allocation'] = redistribute_df['Inverse_Composite_Score'] / total_inverse_score
+                    redistribute_df['Allocated_Resources'] += redistribute_df['Normalized_Allocation'] * excess_funds
+                    df.update(redistribute_df)
+
     return df
+
+
+
+
+
+
 
 def main():
     # Check the current working directory and list files

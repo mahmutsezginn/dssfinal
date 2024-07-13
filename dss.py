@@ -1,70 +1,178 @@
+import os
 import pandas as pd
 import numpy as np
+from sklearn.preprocessing import MinMaxScaler
 
-# Simulated dataset
-data = {
-    'School': ['A', 'B', 'C', 'D', 'E'],
-    'Test Scores': [65, 70, 80, 90, 85],
-    'Graduation Rate': [0.8, 0.85, 0.9, 0.95, 0.92],
-    'Attendance Rate': [0.9, 0.95, 0.85, 0.8, 0.88],
-    'Funding': [1_000_000, 800_000, 1_200_000, 1_500_000, 1_100_000],
-    'Staffing': [30, 25, 35, 40, 28],
-    'Materials': [0.8, 0.7, 0.9, 1.0, 0.85],
-    'Low-income': [0.5, 0.4, 0.6, 0.7, 0.45],
-    'Special Needs': [0.1, 0.15, 0.05, 0.2, 0.12],
-    'Enrollment': [500, 450, 600, 700, 480],
-    'Community Events': [10, 8, 12, 15, 9],
-    'Fundraising': [50_000, 40_000, 60_000, 70_000, 55_000],
-    'Volunteer Hours': [500, 400, 600, 700, 550],
-    'Building Age': [20, 25, 15, 10, 18],
-    'Condition': [0.8, 0.7, 0.9, 1.0, 0.85],
-    'Tech Resources': [0.8, 0.7, 0.9, 1.0, 0.85]
-}
-
-df = pd.DataFrame(data)
-
-# Criteria weights
+# Define weights for each metric
 weights = {
     'Performance Levels': 0.3,
-    'Resource Deficits': 0.2,
-    'Student Demographics': 0.2,
-    'Community Engagement': 0.15,
-    'School Infrastructure Quality': 0.15
+    'Resource Deficits': 0.25,
+    'Student Demographics': 0.15,
+    'Community Engagement': 0.1,
+    'School Infrastructure Quality': 0.2
 }
 
-# Normalization function
+# Define sub-weights for each category
+sub_weights = {
+    'Performance Levels': {
+        'Test Scores': 0.4,
+        'Graduation Rates': 0.4,
+        'Attendance Records': 0.2
+    },
+    'Resource Deficits': {
+        'Funding': 0.6,
+        'Staffing': 0.3,
+        'Materials': 0.1
+    },
+    'Student Demographics': {
+        'Low-Income Students': 0.3,
+        'Special Needs Students': 0.3,
+        'Enrollment Numbers': 0.4
+    },
+    'Community Engagement': {
+        'Community Participation': 0.3,
+        'Fundraising': 0.5,
+        'Volunteer Hours': 0.2
+    },
+    'School Infrastructure Quality': {
+        'Building Age': 0.2,
+        'Condition of Facilities': 0.5,
+        'Technological Resources': 0.3
+    }
+}
+
 def normalize(series):
-    return (series - series.min()) / (series.max() - series.min())
+    """Normalize a pandas Series using MinMaxScaler."""
+    scaler = MinMaxScaler()
+    return scaler.fit_transform(series.values.reshape(-1, 1)).flatten()
 
-# Performance Levels Score
-df['Test Scores Norm'] = normalize(df['Test Scores'])
-df['Performance Score'] = 0.6 * df['Test Scores Norm'] + 0.3 * df['Graduation Rate'] + 0.1 * df['Attendance Rate']
+def calculate_scores(df):
+    """Calculate and normalize scores, and rank schools."""
+    # Ensure columns are in correct format (lists as strings)
+    for col in ['Test_Scores', 'Graduation_Rates', 'Attendance_Records']:
+        # Remove extra characters and then convert to lists
+        df[col] = df[col].astype(str).str.replace(r'[\[\]"“]', '', regex=True)
+        df[col] = df[col].apply(lambda x: [int(i) for i in x.split(',') if i])
 
-# Resource Deficits Score
-df['Funding Norm'] = normalize(df['Funding'])
-df['Staffing Norm'] = normalize(df['Staffing'])
-df['Materials Norm'] = df['Materials']
-df['Resource Score'] = 0.5 * df['Funding Norm'] + 0.3 * df['Staffing Norm'] + 0.2 * df['Materials Norm']
+    # Normalize Performance Levels
+    df['Normalized_Test_Scores'] = df['Test_Scores'].apply(lambda x: normalize(pd.Series(x)).mean())
+    df['Normalized_Graduation_Rates'] = df['Graduation_Rates'].apply(lambda x: normalize(pd.Series(x)).mean())
+    df['Normalized_Attendance_Records'] = df['Attendance_Records'].apply(lambda x: normalize(pd.Series(x)).mean())
 
-# Student Demographics Score
-df['Demographics Score'] = 0.5 * df['Low-income'] + 0.3 * df['Special Needs'] + 0.2 * normalize(df['Enrollment'])
+    # Normalize other relevant fields
+    for col in ['Funding', 'Staffing', 'Materials', 'Low_Income_Students', 
+                'Special_Needs_Students', 'Enrollment_Numbers', 'Community_Participation',
+                'Fundraising', 'Volunteer_Hours', 'Building_Age', 'Condition_of_Facilities',
+                'Technological_Resources', 'Safety']:
+        df[f'Normalized_{col}'] = normalize(df[col])
+    
+    # Calculate composite scores for each category
+    df['Performance_Score'] = (sub_weights['Performance Levels']['Test Scores'] * df['Normalized_Test_Scores'] + 
+                               sub_weights['Performance Levels']['Graduation Rates'] * df['Normalized_Graduation_Rates'] + 
+                               sub_weights['Performance Levels']['Attendance Records'] * df['Normalized_Attendance_Records'])
 
-# Community Engagement Score
-df['Community Score'] = 0.4 * normalize(df['Community Events']) + 0.3 * normalize(df['Fundraising']) + 0.3 * normalize(df['Volunteer Hours'])
+    df['Resource_Deficit_Score'] = (sub_weights['Resource Deficits']['Funding'] * df['Normalized_Funding'] + 
+                                    sub_weights['Resource Deficits']['Staffing'] * df['Normalized_Staffing'] + 
+                                    sub_weights['Resource Deficits']['Materials'] * df['Normalized_Materials'])
 
-# School Infrastructure Quality Score
-df['Infrastructure Score'] = 0.4 * normalize(df['Building Age']) + 0.3 * df['Condition'] + 0.3 * df['Tech Resources']
+    df['Demographic_Score'] = (sub_weights['Student Demographics']['Low-Income Students'] * df['Normalized_Low_Income_Students'] + 
+                               sub_weights['Student Demographics']['Special Needs Students'] * df['Normalized_Special_Needs_Students'] + 
+                               sub_weights['Student Demographics']['Enrollment Numbers'] * df['Normalized_Enrollment_Numbers'])
 
-# Overall Score
-df['Overall Score'] = (weights['Performance Levels'] * df['Performance Score'] +
-                       weights['Resource Deficits'] * df['Resource Score'] +
-                       weights['Student Demographics'] * df['Demographics Score'] +
-                       weights['Community Engagement'] * df['Community Score'] +
-                       weights['School Infrastructure Quality'] * df['Infrastructure Score'])
+    df['Community_Score'] = (sub_weights['Community Engagement']['Community Participation'] * df['Normalized_Community_Participation'] + 
+                             sub_weights['Community Engagement']['Fundraising'] * df['Normalized_Fundraising'] + 
+                             sub_weights['Community Engagement']['Volunteer Hours'] * df['Normalized_Volunteer_Hours'])
 
-# Rank schools by overall score
-df['Rank'] = df['Overall Score'].rank(ascending=False)
+    df['Infrastructure_Score'] = (sub_weights['School Infrastructure Quality']['Building Age'] * df['Normalized_Building_Age'] + 
+                                  sub_weights['School Infrastructure Quality']['Condition of Facilities'] * df['Normalized_Condition_of_Facilities'] + 
+                                  sub_weights['School Infrastructure Quality']['Technological Resources'] * df['Normalized_Technological_Resources'])
 
-# Display the ranked list
-ranked_schools = df.sort_values(by='Rank')
-print(ranked_schools[['School', 'Overall Score', 'Rank']])
+    # Calculate the final composite score
+    df['Composite_Score'] = (weights['Performance Levels'] * (1 - df['Performance_Score']) + # Subtracting as high performance reduces need for resources
+                             weights['Resource Deficits'] * df['Resource_Deficit_Score'] + 
+                             weights['Student Demographics'] * df['Demographic_Score'] - # Subtracting as high community engagement reduces need for resources
+                             weights['Community Engagement'] * (1 - df['Community_Score']) + 
+                             weights['School Infrastructure Quality'] * df['Infrastructure_Score'])
+
+    # Rank schools based on composite score
+    df['Rank'] = df['Composite_Score'].rank(ascending=False).astype(int)
+    
+    return df
+
+def categorize_schools(df):
+    """Categorize schools based on composite score thresholds."""
+    conditions = [
+        (df['Composite_Score'] < 0.4),
+        (df['Composite_Score'] >= 0.4) & (df['Composite_Score'] < 0.7),
+        (df['Composite_Score'] >= 0.7) & (df['Composite_Score'] < 0.85),
+        (df['Composite_Score'] >= 0.85)
+    ]
+    categories = ['High Need', 'Moderate Need', 'Low Need', 'No Need']
+    
+    df['Need_Category'] = np.select(conditions, categories)
+    
+    return df
+
+def allocate_resources(df, total_resources):
+    """Allocate resources based on need categories and composite scores."""
+    # Categorize schools based on composite score thresholds
+    df = categorize_schools(df)
+    
+    # Calculate the base allocation for High Need schools
+    base_allocation_high_need = 0.5 * total_resources
+    
+    # Count the number of schools in each category
+    category_counts = df['Need_Category'].value_counts(normalize=True)
+    
+    # Calculate remaining resources
+    remaining_resources = total_resources - base_allocation_high_need
+    
+    # Allocate remaining resources proportionally
+    category_allocation = {
+        'High Need': base_allocation_high_need,
+        'Moderate Need': category_counts.get('Moderate Need', 0) * remaining_resources,
+        'Low Need': category_counts.get('Low Need', 0) * remaining_resources,
+        'No Need': 0
+    }
+    
+    # Allocate resources within each category
+    allocations = []
+    for category, allocation in category_allocation.items():
+        category_df = df[df['Need_Category'] == category]
+        total_score = category_df['Composite_Score'].sum()
+        category_df['Allocated_Resources'] = category_df['Composite_Score'].apply(lambda x: (x / total_score) * allocation)
+        allocations.append(category_df)
+    
+    # Combine all allocations into one DataFrame
+    df = pd.concat(allocations)
+    
+    return df
+
+def main():
+    # Check the current working directory and list files
+    print("Current working directory:", os.getcwd())
+    print("Files in current directory:", os.listdir('.'))
+    
+    # Read the dataset
+    file_path = 'school_data.csv'
+    df = pd.read_csv(file_path)
+    
+    # Calculate scores and rank schools
+    df = calculate_scores(df)
+    
+    # Define total resources available for allocation
+    total_resources = 100000000  # $100,000,000
+    
+    # Allocate resources based on need categories and composite scores
+    df = allocate_resources(df, total_resources)
+    
+    # Format the allocated resources to the correct format
+    df['Allocated_Resources'] = df['Allocated_Resources'].apply(lambda x: f"${x / 1_000_000:.1f}M")
+    
+    # Output the final DataFrame with scores, ranks, allocation groups, and allocated resources in a clear format
+    result = df[['School', 'Composite_Score', 'Need_Category', 'Rank', 'Allocated_Resources']]
+    result = result.sort_values(by='Rank')
+    print(result.to_string(index=False))
+
+if __name__ == "__main__":
+    main()
