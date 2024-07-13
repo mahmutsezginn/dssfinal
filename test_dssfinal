@@ -1,0 +1,70 @@
+import unittest
+import pandas as pd
+from sklearn.preprocessing import MinMaxScaler
+import numpy as np
+from dssfinal import normalize, calculate_scores, categorize_schools, allocate_resources
+
+# Assume the main functions are imported from the module
+# from dss_module import normalize, calculate_scores, categorize_schools, allocate_resources
+
+class TestDSS(unittest.TestCase):
+
+    def test_normalize(self):
+        series = pd.Series([1, 2, 3, 4, 5])
+        normalized_series = normalize(series)
+        scaler = MinMaxScaler()
+        expected = scaler.fit_transform(series.values.reshape(-1, 1)).flatten()
+        np.testing.assert_almost_equal(normalized_series, expected, decimal=5, err_msg="Normalization function failed")
+
+    def test_calculate_scores(self):
+        data = {
+            'School': ['A', 'B'],
+            'Test_Scores': ['[50, 60, 70]', '[70, 80, 90]'],
+            'Graduation_Rates': ['[80, 85, 90]', '[60, 65, 70]'],
+            'Attendance_Records': ['[90, 95, 100]', '[70, 75, 80]'],
+            'Funding': [100000, 200000],
+            'Staffing': [50, 60],
+            'Materials': [30, 40],
+            'Low_Income_Students': [20, 30],
+            'Special_Needs_Students': [10, 20],
+            'Enrollment_Numbers': [500, 600],
+            'Community_Participation': [40, 50],
+            'Fundraising': [10000, 20000],
+            'Volunteer_Hours': [100, 200],
+            'Building_Age': [20, 30],
+            'Condition_of_Facilities': [80, 90],
+            'Technological_Resources': [70, 80],
+            'Safety': [90, 85]
+        }
+        df = pd.DataFrame(data)
+        df = calculate_scores(df)
+        self.assertTrue('Composite_Score' in df.columns, "Composite Score calculation failed")
+        self.assertTrue('Rank' in df.columns, "Ranking calculation failed")
+
+    def test_categorize_schools(self):
+        data = {
+            'School': ['A', 'B'],
+            'Composite_Score': [0.35, 0.75]
+        }
+        df = pd.DataFrame(data)
+        df = categorize_schools(df)
+        self.assertTrue('Need_Category' in df.columns, "Categorization failed")
+        self.assertEqual(df.iloc[0]['Need_Category'], 'High Need', "High Need categorization failed")
+        self.assertEqual(df.iloc[1]['Need_Category'], 'Low Need', "Low Need categorization failed")
+
+    def test_allocate_resources(self):
+        data = {
+            'School': ['A', 'B', 'C'],
+            'Composite_Score': [0.35, 0.55, 0.75],
+            'Need_Category': ['High Need', 'Moderate Need', 'Low Need']
+        }
+        df = pd.DataFrame(data)
+        total_resources = 1000000
+        df = allocate_resources(df, total_resources)
+        self.assertTrue('Allocated_Resources' in df.columns, "Resource Allocation failed")
+        self.assertGreater(df[df['Need_Category'] == 'High Need']['Allocated_Resources'].sum(),
+                           df[df['Need_Category'] == 'Low Need']['Allocated_Resources'].sum(), 
+                           "High Need category should receive more resources")
+
+if __name__ == '__main__':
+    unittest.main()

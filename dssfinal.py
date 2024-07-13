@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 
-# Define weights for each metric
+# Weights for each metric
 weights = {
     'Performance Levels': 0.3,
     'Resource Deficits': 0.25,
@@ -12,7 +12,7 @@ weights = {
     'School Infrastructure Quality': 0.2
 }
 
-# Define sub-weights for each category
+# Sub-weights for each category
 sub_weights = {
     'Performance Levels': {
         'Test Scores': 0.4,
@@ -88,9 +88,9 @@ def calculate_scores(df):
                                   sub_weights['School Infrastructure Quality']['Technological Resources'] * df['Normalized_Technological_Resources'])
 
     # Calculate the final composite score
-    df['Composite_Score'] = (weights['Performance Levels'] * (1 - df['Performance_Score'])+# Subtracting as high performance reduces need for resources
+    df['Composite_Score'] = (weights['Performance Levels'] * (1 - df['Performance_Score'])+ # High performance reduces need for resources
                              weights['Resource Deficits'] * df['Resource_Deficit_Score'] + 
-                             weights['Student Demographics'] * df['Demographic_Score'] - # Subtracting as high community engagement reduces need for resources
+                             weights['Student Demographics'] * df['Demographic_Score'] - # High performance reduces need for resources
                              weights['Community Engagement'] * (1- df['Community_Score']) + 
                              weights['School Infrastructure Quality'] * df['Infrastructure_Score'])
 
@@ -110,9 +110,7 @@ def categorize_schools(df):
     categories = ['High Need', 'Moderate Need', 'Low Need', 'No Need']
     
     df['Need_Category'] = np.select(conditions, categories)
-    
     return df
-
 
 def allocate_resources(df, total_resources):
     """Allocate resources based on need categories and composite scores."""
@@ -152,13 +150,11 @@ def allocate_resources(df, total_resources):
                 max_allocation_per_school = float('inf')  # No cap for High Need
 
             category_df.loc[:, 'Allocated_Resources'] = category_df['Allocated_Resources'].apply(
-                lambda x: min(x, max_allocation_per_school))
-            
+                lambda x: min(x, max_allocation_per_school))       
             # Collect any excess funds resulting from the cap
             excess_funds = allocation - category_df['Allocated_Resources'].sum()
             
             df.update(category_df)
-            
             # Redistribute excess funds among schools in needier categories
             if excess_funds > 0:
                 if category == 'Low Need':
@@ -178,13 +174,7 @@ def allocate_resources(df, total_resources):
                     redistribute_df['Normalized_Allocation'] = redistribute_df['Inverse_Composite_Score'] / total_inverse_score
                     redistribute_df['Allocated_Resources'] += redistribute_df['Normalized_Allocation'] * excess_funds
                     df.update(redistribute_df)
-
     return df
-
-
-
-
-
 
 
 def main():
